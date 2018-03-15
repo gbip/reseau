@@ -3,7 +3,7 @@
 #define MAX_SOCKETS 1024
 
 
-mic_tcp_sock binded_socket[MAX_SOCKETS];
+mic_tcp_sock binded_sockets[MAX_SOCKETS];
 int file_descriptor_counter = 0;
 
 /*
@@ -17,9 +17,9 @@ int mic_tcp_socket(start_mode sm)
 	result = initialize_components(sm); /* Appel obligatoire */
 	set_loss_rate(0);
 	if (result != -1) {
-		binded_socket[file_descriptor_counter].fd = file_descriptor_counter;
-		binded_socket[file_descriptor_counter].state = CONNECTED;
-		result = binded_socket[file_descriptor_counter].fd;
+		binded_sockets[file_descriptor_counter].fd = file_descriptor_counter;
+		binded_sockets[file_descriptor_counter].state = CONNECTED;
+		result = binded_sockets[file_descriptor_counter].fd;
 		file_descriptor_counter++;
 	}
 	return result;
@@ -35,7 +35,7 @@ int mic_tcp_bind(int socket, mic_tcp_sock_addr addr)
 	if (socket > file_descriptor_counter) {
 		return -1;
 	} else {
-		binded_socket[socket].addr=addr;	
+		binded_sockets[socket].addr=addr;	
 		return 0;
 	}
 }
@@ -47,7 +47,7 @@ int mic_tcp_bind(int socket, mic_tcp_sock_addr addr)
 int mic_tcp_accept(int socket, mic_tcp_sock_addr* addr)
 {
 	printf("[MIC-TCP] Appel de la fonction: ");  printf(__FUNCTION__); printf("\n");
-	return -1;
+	return 1;
 }
 
 /*
@@ -57,7 +57,7 @@ int mic_tcp_accept(int socket, mic_tcp_sock_addr* addr)
 int mic_tcp_connect(int socket, mic_tcp_sock_addr addr)
 {
 	printf("[MIC-TCP] Appel de la fonction: ");  printf(__FUNCTION__); printf("\n");
-	return -1;
+	return 1;
 }
 
 /*
@@ -67,7 +67,28 @@ int mic_tcp_connect(int socket, mic_tcp_sock_addr addr)
 int mic_tcp_send (int mic_sock, char* mesg, int mesg_size)
 {
 	printf("[MIC-TCP] Appel de la fonction: "); printf(__FUNCTION__); printf("\n");
-	return -1;
+	mic_tcp_pdu pdu;
+	mic_tcp_sock_addr addr = binded_sockets[mic_sock].addr;
+
+	/* Gestion du header */
+	pdu.header.source_port = addr.port;
+	pdu.header.dest_port = 9999; // Cette valeur va être modifiée derrière par la couche en dessous.
+	pdu.header.seq_num = 0;
+	pdu.header.ack_num = 0;
+	pdu.header.syn= 0;
+	pdu.header.ack = 0;
+	pdu.header.fin = 0;
+
+	/* Gestion de la payload */
+	pdu.payload.data = mesg;
+	pdu.payload.size = mesg_size;
+
+	/* Envoie du PDU */
+	if (IP_send(pdu,addr) != -1) {
+		return mesg_size;
+	} else {
+		return -1;
+	}
 }
 
 /*
@@ -111,4 +132,5 @@ int mic_tcp_close (int socket)
 void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_sock_addr addr)
 {
 	printf("[MIC-TCP] Appel de la fonction: "); printf(__FUNCTION__); printf("\n");
+	app_buffer_put(pdu.payload);
 }
