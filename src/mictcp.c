@@ -2,8 +2,16 @@
 #include <api/mictcp_core.h>
 #define MAX_SOCKETS 1024
 
+/* Tableau de socket */
+mic_tcp_sock available_sockets[MAX_SOCKETS];
 
-mic_tcp_sock binded_sockets[MAX_SOCKETS];
+/* Tableaux de numéros de séquence */
+//int pe[MAX_SOCKETS];
+//int pa[MAX_SOCKETS];
+int pe = 0;
+int pa = 0;
+
+/* Compteur pour les descripteurs de fichiers */
 int file_descriptor_counter = 0;
 
 /*
@@ -20,8 +28,10 @@ int mic_tcp_socket(start_mode sm)
 
 	/* Parcours du tableau à la recherche d'un socket fermé */
 	for (int i = 0; i < file_descriptor_counter; i++) {
-		if (binded_sockets[i].state == CLOSED) {
-			binded_sockets[i].state = CONNECTED;
+		if (available_sockets[i].state == CLOSED) {
+			available_sockets[i].state = CONNECTED;
+			//pe[i] = 0;
+			//pa[i] = 0;
 			result = i;
 			free_socket_found = 1;
 			break;
@@ -30,9 +40,11 @@ int mic_tcp_socket(start_mode sm)
 
 	/* Affectation d'un socket si on a pas trouvé de socket à réutiliser */
 	if ((result != -1) && (free_socket_found == 0)) {
-		binded_sockets[file_descriptor_counter].fd = file_descriptor_counter;
-		binded_sockets[file_descriptor_counter].state = CONNECTED;
-		result = binded_sockets[file_descriptor_counter].fd;
+		available_sockets[file_descriptor_counter].fd = file_descriptor_counter;
+		available_sockets[file_descriptor_counter].state = CONNECTED;
+		result = available_sockets[file_descriptor_counter].fd;
+		//pe[file_descriptor_counter] = 0;
+		//pa[file_descriptor_counter] = 0;
 		file_descriptor_counter++;
 	}
 
@@ -50,7 +62,7 @@ int mic_tcp_bind(int socket, mic_tcp_sock_addr addr)
 		return -1;
 	} else {
 		/* Comme le numéro de descripteur de fichier correspond à l'index dans le tableau, on peut accèder à la structure directement */
-		binded_sockets[socket].addr=addr;	
+		available_sockets[socket].addr=addr;	
 		return 0;
 	}
 }
@@ -82,7 +94,7 @@ int mic_tcp_connect(int socket, mic_tcp_sock_addr addr)
 int mic_tcp_send (int mic_sock, char* mesg, int mesg_size)
 {
 	printf("[MIC-TCP] Appel de la fonction: "); printf(__FUNCTION__); printf("\n");
-	mic_tcp_sock_addr addr = binded_sockets[mic_sock].addr;
+	mic_tcp_sock_addr addr = available_sockets[mic_sock].addr;
 	mic_tcp_pdu pdu;
 
 	/* Gestion du header */
@@ -120,7 +132,7 @@ int mic_tcp_recv (int socket, char* mesg, int max_mesg_size)
 	mic_tcp_payload payload;
 	payload.size = max_mesg_size;
 	payload.data = mesg;
-	
+
 	int result = app_buffer_get(payload);
 	if (result != -1)  {
 		return result;
@@ -137,8 +149,31 @@ int mic_tcp_recv (int socket, char* mesg, int max_mesg_size)
 int mic_tcp_close (int socket)
 {
 	printf("[MIC-TCP] Appel de la fonction :  "); printf(__FUNCTION__); printf("\n");
-	binded_sockets[socket].state=CLOSED;
-	return -1;
+	available_sockets[socket].state=CLOSED;
+	return 0;
+}
+
+/*
+ * Construis un PDU de ack
+ */
+mic_tcp_pdu make_ack(int ack_num, mic_tcp_addr addr) {
+	mic_tcp_pdu pdu;
+	/* Gestion du header */
+	pdu.header.source_port = addr.port;
+	pdu.header.dest_port = 9999; // Cette valeur va être modifiée derrière par la couche en dessous, du coup on peut mettre n'importe quoi.
+	pdu.header.seq_num = 42; // TODO : Vérifier que c'est bon.
+	pdu.header.ack_num = ack_num;
+	pdu.header.syn= 0;
+	pdu.header.ack = 1;
+	pdu.header.fin = 0;
+	return pdu;
+}
+
+/*
+ * Renvoies 1 si c'est le ack que l'on attends.
+ */
+int verify_ack(mic_tcp_pdu pdu, int ack_num) {
+	return pdu.header.ack == 1 && pdu.header.ack_num == ack_num;
 }
 
 /*
@@ -150,5 +185,34 @@ int mic_tcp_close (int socket)
 void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_sock_addr addr)
 {
 	printf("[MIC-TCP] Appel de la fonction: "); printf(__FUNCTION__); printf("\n");
-	app_buffer_put(pdu.payload);
+	
+	/* Envoi d'un PDU avec n°seq 'x', renvoi d'un ack avec n°ack 'x'.
+	   Gestion de l'envoi du PDU avec bon numéro de séquence*/	
+
+
+	/* Vérification du numéro de séquence */
+	if (pdu.header.seq_num == pe) {
+		app_buffer_put(pdu.payload);
+		mic_tcp_pdu pdu_ack = make_ack(pe);
+		pe++;
+		IP_send(pdu_ack,addr);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 }
