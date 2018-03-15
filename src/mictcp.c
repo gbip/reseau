@@ -32,9 +32,12 @@ int mic_tcp_socket(start_mode sm)
 int mic_tcp_bind(int socket, mic_tcp_sock_addr addr)
 {
 	printf("[MIC-TCP] Appel de la fonction: ");  printf(__FUNCTION__); printf("\n");
-	
-
-	return -1;
+	if (socket > file_descriptor_counter) {
+		return -1;
+	} else {
+		binded_socket[socket].addr=addr;	
+		return 0;
+	}
 }
 
 /*
