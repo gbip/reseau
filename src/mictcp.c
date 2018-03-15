@@ -13,15 +13,28 @@ int file_descriptor_counter = 0;
 int mic_tcp_socket(start_mode sm)
 {
 	int result = -1;
+	int free_socket_found = 0;
 	printf("[MIC-TCP] Appel de la fonction: ");  printf(__FUNCTION__); printf("\n");
 	result = initialize_components(sm); /* Appel obligatoire */
 	set_loss_rate(0);
-	if (result != -1) {
+
+	/* Parcours du tableau à la recherche d'un socket fermé */
+	for (int i = 0; i < file_descriptor_counter; i++) {
+		if (binded_sockets[i].state == CLOSED) {
+			binded_sockets[i].state = CONNECTED;
+			result = i;
+			free_socket_found = 1;
+			break;
+		}
+	}
+
+	if ((result != -1) && (free_socket_found == 0)) {
 		binded_sockets[file_descriptor_counter].fd = file_descriptor_counter;
 		binded_sockets[file_descriptor_counter].state = CONNECTED;
 		result = binded_sockets[file_descriptor_counter].fd;
 		file_descriptor_counter++;
 	}
+
 	return result;
 }
 
@@ -119,6 +132,7 @@ int mic_tcp_recv (int socket, char* mesg, int max_mesg_size)
 int mic_tcp_close (int socket)
 {
 	printf("[MIC-TCP] Appel de la fonction :  "); printf(__FUNCTION__); printf("\n");
+	binded_sockets[socket].state=CLOSED;
 	return -1;
 }
 
