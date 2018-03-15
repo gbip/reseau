@@ -1,5 +1,10 @@
 #include <mictcp.h>
 #include <api/mictcp_core.h>
+#define MAX_SOCKETS 1024
+
+
+mic_tcp_sock binded_socket[MAX_SOCKETS];
+int file_descriptor_counter = 0;
 
 /*
  * Permet de créer un socket entre l’application et MIC-TCP
@@ -7,12 +12,17 @@
  */
 int mic_tcp_socket(start_mode sm)
 {
-   int result = -1;
-   printf("[MIC-TCP] Appel de la fonction: ");  printf(__FUNCTION__); printf("\n");
-   result = initialize_components(sm); /* Appel obligatoire */
-   set_loss_rate(0);
-
-   return result;
+	int result = -1;
+	printf("[MIC-TCP] Appel de la fonction: ");  printf(__FUNCTION__); printf("\n");
+	result = initialize_components(sm); /* Appel obligatoire */
+	set_loss_rate(0);
+	if (result != -1) {
+		binded_socket[file_descriptor_counter].fd = file_descriptor_counter;
+		binded_socket[file_descriptor_counter].state = CONNECTED;
+		result = binded_socket[file_descriptor_counter].fd;
+		file_descriptor_counter++;
+	}
+	return result;
 }
 
 /*
@@ -21,8 +31,10 @@ int mic_tcp_socket(start_mode sm)
  */
 int mic_tcp_bind(int socket, mic_tcp_sock_addr addr)
 {
-   printf("[MIC-TCP] Appel de la fonction: ");  printf(__FUNCTION__); printf("\n");
-   return -1;
+	printf("[MIC-TCP] Appel de la fonction: ");  printf(__FUNCTION__); printf("\n");
+	
+
+	return -1;
 }
 
 /*
@@ -31,8 +43,8 @@ int mic_tcp_bind(int socket, mic_tcp_sock_addr addr)
  */
 int mic_tcp_accept(int socket, mic_tcp_sock_addr* addr)
 {
-    printf("[MIC-TCP] Appel de la fonction: ");  printf(__FUNCTION__); printf("\n");
-    return -1;
+	printf("[MIC-TCP] Appel de la fonction: ");  printf(__FUNCTION__); printf("\n");
+	return -1;
 }
 
 /*
@@ -41,8 +53,8 @@ int mic_tcp_accept(int socket, mic_tcp_sock_addr* addr)
  */
 int mic_tcp_connect(int socket, mic_tcp_sock_addr addr)
 {
-    printf("[MIC-TCP] Appel de la fonction: ");  printf(__FUNCTION__); printf("\n");
-    return -1;
+	printf("[MIC-TCP] Appel de la fonction: ");  printf(__FUNCTION__); printf("\n");
+	return -1;
 }
 
 /*
@@ -51,8 +63,8 @@ int mic_tcp_connect(int socket, mic_tcp_sock_addr addr)
  */
 int mic_tcp_send (int mic_sock, char* mesg, int mesg_size)
 {
-    printf("[MIC-TCP] Appel de la fonction: "); printf(__FUNCTION__); printf("\n");
-    return -1;
+	printf("[MIC-TCP] Appel de la fonction: "); printf(__FUNCTION__); printf("\n");
+	return -1;
 }
 
 /*
@@ -63,8 +75,8 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size)
  */
 int mic_tcp_recv (int socket, char* mesg, int max_mesg_size)
 {
-    printf("[MIC-TCP] Appel de la fonction: "); printf(__FUNCTION__); printf("\n");
-    return -1;
+	printf("[MIC-TCP] Appel de la fonction: "); printf(__FUNCTION__); printf("\n");
+	return -1;
 }
 
 /*
@@ -74,8 +86,8 @@ int mic_tcp_recv (int socket, char* mesg, int max_mesg_size)
  */
 int mic_tcp_close (int socket)
 {
-    printf("[MIC-TCP] Appel de la fonction :  "); printf(__FUNCTION__); printf("\n");
-    return -1;
+	printf("[MIC-TCP] Appel de la fonction :  "); printf(__FUNCTION__); printf("\n");
+	return -1;
 }
 
 /*
@@ -86,5 +98,5 @@ int mic_tcp_close (int socket)
  */
 void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_sock_addr addr)
 {
-    printf("[MIC-TCP] Appel de la fonction: "); printf(__FUNCTION__); printf("\n");
+	printf("[MIC-TCP] Appel de la fonction: "); printf(__FUNCTION__); printf("\n");
 }
