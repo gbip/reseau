@@ -4,9 +4,14 @@ Paul FLORENCE
 3MIC-E
 ----
 
+
+
+Lorsque nous avons testé le protocole TCP pour l'envoi d'une vidéo, nous avons remarqué qu'à cause du système de reprise des pertes, toutes les images arrivaient côté récepteur mais qu'il fallait du temps pour toutes les récupérer. Nous avions donc une vidéo très saccadée. Notre œil ne voit pas toutes les images et c'est pourquoi il y a une possibilité de faire un protocole plus évolué. Il inclue un mécanisme de reprise des pertes mais elles sont paramétrées telles qu'un certain pourcentage de perte est déclaré acceptable. Il ne va pas nuire au bon visionnage de la vidéo et va permettre d'améliorer la fluidité de lecture.
+
+
 # Implémentation
 
-Pour permettre l'utilisation de différents nous avons choisi de les stocker dans un tableau global comme ceci :
+Pour permettre l'utilisation de différents sockets nous avons choisi de les stocker dans un tableau global comme ceci :
 
 ```c
 #define MAX_SOCKET 1024
@@ -21,6 +26,7 @@ Nous avons rajouté un état `CONNECTED` dans `protocol_state` qui est l'état a
 
 Pour l'envoi de PDU, on ne s'est pas occupé du numéro de port de destination car il est geré par la couche IP lors de l'appel à `IP_send`.
 
+Pour compiler on utilise la commande `make all`.
 
 
 
