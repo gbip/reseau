@@ -1,15 +1,29 @@
 #include <mictcp.h>
 #include <api/mictcp_core.h>
+
+// Le nomre de socket maximum
 #define MAX_SOCKETS 1024
+
+// La taille du buffer d'envoi des pdus
+#define SEND_PDU_BUFFER_SIZE 1024
+
+// Le timeout en ms
+#define TIMEOUT 2000
 
 /* Tableau de socket */
 mic_tcp_sock available_sockets[MAX_SOCKETS];
+
+/* Tableau de pdu envoyés */
+mic_tcp_pdu send_pdu[SEND_PDU_BUFFER_SIZE];
+int last_pdu_sent = 0;
 
 /* Tableaux de numéros de séquence */
 //int pe[MAX_SOCKETS];
 //int pa[MAX_SOCKETS];
 int pe = 0;
 int pa = 0;
+
+
 
 /* Compteur pour les descripteurs de fichiers */
 int file_descriptor_counter = 0;
@@ -100,7 +114,7 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size)
 	/* Gestion du header */
 	pdu.header.source_port = addr.port;
 	pdu.header.dest_port = 9999; // Cette valeur va être modifiée derrière par la couche en dessous, du coup on peut mettre n'importe quoi.
-	pdu.header.seq_num = 0;
+	pdu.header.seq_num = pa;
 	pdu.header.ack_num = 0;
 	pdu.header.syn= 0;
 	pdu.header.ack = 0;
@@ -110,11 +124,31 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size)
 	pdu.payload.data = mesg;
 	pdu.payload.size = mesg_size;
 
+	/* Sauvegarde du PDU dans le buffer */	
+	if (last_pdu_send > 1023) {
+		printf("Buffer plein\n");
+		last_pdu_sent = 0;
+	}
+
+	send_pdu[last_pdu_sent] = pdu;
+	last_pdu_sent++;
+	pa++;
+	
 	/* Envoi du PDU */
 	if (IP_send(pdu,addr) != -1) {
 		return mesg_size;
 	} else {
 		return -1;
+	}
+}
+
+/* 
+ * Attends la récéption d'un acquitement, renvoie 1 si on a reçu l'acquitement pour ack_number avant timeout, sinon renvoie 0.
+ */
+int wait_for_ack(int ack_number) {
+	unsigned long timestamp_pdu_sent = get_now_time_msec();
+	while (get_now_time_msec() - timestamp_pdu_sent < TIMEOUT) {
+		mic_tcp_pdu pdu_received = app_buffer_get
 	}
 }
 
@@ -197,22 +231,5 @@ void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_sock_addr addr)
 		pe++;
 		IP_send(pdu_ack,addr);
 	}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+	// FIXME : Vérifier qu'il n'y a vraiment rien à faire si jamais le numéro de séquence n'est pas bon.
 }
