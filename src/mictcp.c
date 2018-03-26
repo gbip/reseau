@@ -24,9 +24,19 @@ int pe = 0;
 int pa = 0;
 
 
+int ack_rec = 0;
 
 /* Compteur pour les descripteurs de fichiers */
 int file_descriptor_counter = 0;
+
+void afficher_pdu(mic_tcp_pdu pdu) {
+	printf("Source_port : %d | Seq_num : %d | Ack_num : %d | Syn : %d | Ack : %d | Fin : %d | Data (%d) : ",pdu.header.source_port, pdu.header.seq_num, pdu.header.ack_num, pdu.header.syn, pdu.header.ack, pdu.header.fin, pdu.payload.size);
+	for (int i = 0; i < pdu.payload.size; i++) {
+		printf("%d ", pdu.payload.data[i]);
+	}
+	printf("\n");
+}
+
 
 /*
  * Permet de créer un socket entre l’application et MIC-TCP
@@ -104,19 +114,20 @@ int mic_tcp_connect(int socket, mic_tcp_sock_addr addr)
 /* 
  * Attends la récéption d'un acquitement, renvoie 1 si on a reçu l'acquitement pour ack_number avant timeout, sinon renvoie 0.
  */
-int wait_for_ack(int ack_number) {
+int wait_for_ack(int ack_number, mic_tcp_sock_addr *addr) {
 	unsigned long timestamp_pdu_sent = get_now_time_msec();
 	while (get_now_time_msec() - timestamp_pdu_sent < TIMEOUT) {
-		printf("Temps écoulé : %lud s\n",get_now_time_msec() - timestamp_pdu_sent);
-		mic_tcp_payload payload_received;
-		payload_received.size = 0;
-		payload_received.data = malloc(payload_received.size * sizeof(int));
-		printf("Appbufferget\n");
-		app_buffer_get(payload_received);
-		printf("Appbufferget fini\n");
-		if (payload_received.size == 0) {
-			return 1;
+		mic_tcp_pdu pdu_ack;
+		pdu_ack.payload.size = 0;
+		pdu_ack.payload.data = malloc(0);
+		if (IP_recv(&pdu_ack, addr, TIMEOUT-(get_now_time_msec()-timestamp_pdu_sent)) != -1) {
+			afficher_pdu(pdu_ack);
+			printf("pe : %d, pa : %d \n",pe,pa);
+			if (pdu_ack.header.ack == 1 && pdu_ack.header.ack_num == ((pe + 1) % 2)) {
+				return 1;
+			}
 		}
+		sleep(0.01);
 	}
 	return 0;
 }
@@ -146,20 +157,24 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size)
 
 	/* Sauvegarde du PDU dans le buffer */	
 	/*if (last_pdu_sent > 1023) {
-		printf("Buffer plein\n");
-		last_pdu_sent = 0;
-	}
+	  printf("Buffer plein\n");
+	  last_pdu_sent = 0;
+	  }
 
-	send_pdu[last_pdu_sent] = pdu;
-	last_pdu_sent++;
-	*/
+	  send_pdu[last_pdu_sent] = pdu;
+	  last_pdu_sent++;
+	 */
+	printf("pe : %d, pa : %d \n",pe,pa);
 	pa = (pa + 1) % 2;
-	
-	printf("Envoi du PDU\n");	
+
+	printf("Envoi du PDU : ");	
+	afficher_pdu(pdu);
 	/* Envoi du PDU */
 	if (IP_send(pdu,addr) != -1) {
-		printf("Début d'attente du ack");
-		while (!wait_for_ack(pa)) {
+		printf("Début d'attente du ack\n");
+		while (!wait_for_ack(pa,&addr)) {
+			printf("Envoi de : ");
+			afficher_pdu(pdu);
 			printf("Attente du ACK\n");
 			if (IP_send(pdu,addr) != -1) {
 				return -1;
@@ -213,6 +228,7 @@ int mic_tcp_close (int socket)
  */
 mic_tcp_pdu make_ack(int ack_num, mic_tcp_sock_addr addr) {
 	mic_tcp_pdu pdu;
+
 	/* Gestion du header */
 	pdu.header.source_port = addr.port;
 	pdu.header.dest_port = 9999; // Cette valeur va être modifiée derrière par la couche en dessous, du coup on peut mettre n'importe quoi.
@@ -233,7 +249,6 @@ mic_tcp_pdu make_ack(int ack_num, mic_tcp_sock_addr addr) {
 int verify_ack(mic_tcp_pdu pdu, int ack_num) {
 	return pdu.header.ack == 1 && pdu.header.ack_num == ack_num;
 }
-
 /*
  * Traitement d’un PDU MIC-TCP reçu (mise à jour des numéros de séquence
  * et d'acquittement, etc.) puis insère les données utiles du PDU dans
@@ -243,21 +258,24 @@ int verify_ack(mic_tcp_pdu pdu, int ack_num) {
 void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_sock_addr addr)
 {
 	printf("[MIC-TCP] Appel de la fonction: "); printf(__FUNCTION__); printf("\n");
-	
+
 	/* Envoi d'un PDU avec n°seq 'x', renvoi d'un ack avec n°ack 'x'.
 	   Gestion de l'envoi du PDU avec bon numéro de séquence*/	
-
+	afficher_pdu(pdu);	
 
 	/* Vérification du numéro de séquence */
 	if (pdu.header.seq_num == pe) {
 		printf("PDU reçu\n");
 		app_buffer_put(pdu.payload);
 		mic_tcp_pdu pdu_ack = make_ack(pe,addr);
+		printf("pe : %d, pa : %d \n",pe,pa);
 		pe = (pe + 1) % 2;
+		printf("Envoi du ack : ");
+		afficher_pdu(pdu_ack);	
 		if (IP_send(pdu_ack,addr) == -1) {
 			printf("Erreur : impossible d'envoyer l'acquitement\n");
 			exit(1);
 		}
 	}
 	// FIXME : Vérifier qu'il n'y a vraiment rien à faire si jamais le numéro de séquence n'est pas bon.
-}
+	}
