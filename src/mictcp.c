@@ -1,5 +1,6 @@
 /* TODO : A faire durant le TP3 :
    Mettre à jour l'état du socket
+   Résoudre les erreurs dans le accept/connect
  */
 #include <mictcp.h>
 #include <api/mictcp_core.h>
@@ -119,7 +120,65 @@ int mic_tcp_bind(int socket, mic_tcp_sock_addr addr)
 int mic_tcp_accept(int socket, mic_tcp_sock_addr* addr)
 {
 	printf("[MIC-TCP] Appel de la fonction: ");  printf(__FUNCTION__); printf("\n");
-	return 1;
+	
+	/* Récéption du SYN */
+	int rec_syn = 0;
+	{
+		mic_tcp_pdu pdu_syn;
+		pdu_syn.payload.size = 0;
+		pdu_syn.payload.data = malloc(pdu_syn.payload.size * sizeof(int));
+
+		while (1) {
+			if (IP_recv(&pdu_syn, addr, TIMEOUT) == -1) {
+				printf("Erreur recv \n");
+				return -1;	
+			}
+
+			/* Vérification du SYN */
+			if (pdu_syn.header.syn == 1 && pdu_syn.header.ack == 0 && !pdu_syn.header.fin == 0) {
+				rec_syn = 1;
+				printf("Invalid packet\n");
+				break;
+			}
+			sleep(0.1);
+		}
+	}
+
+	if (rec_syn) {
+		/* Envoi du SYN + ACK */
+		mic_tcp_pdu pdu_syn_ack = make_special_pdu(1,1,0,*addr);
+
+		if (IP_send(pdu_syn_ack, *addr) == -1) {
+			printf("Erreur d'envoi du ack \n");
+			return -1;
+		}
+	}
+
+	/* Récéption du ACK */
+	int rec_ack = 0;
+	{
+		mic_tcp_pdu pdu_ack;
+		pdu_ack.payload.size = 0;
+		pdu_ack.payload.data = malloc(pdu_ack.payload.size * sizeof(int));
+		unsigned long timestamp_pdu_sent = get_now_time_msec();
+
+		while (get_now_time_msec() - timestamp_pdu_sent < TIMEOUT) {
+			if (IP_recv(&pdu_ack, addr, TIMEOUT-(get_now_time_msec()-timestamp_pdu_sent)) == -1) {
+				return -1;	
+			}
+
+			/* Vérification du ACK */
+			if (pdu_ack.header.syn == 0 && pdu_ack.header.ack == 1 && !pdu_ack.header.fin == 0) {
+				rec_ack = 1;
+				break;
+			}
+		}
+	}
+	if (rec_ack) {
+		return 0;
+	} else {
+		return -1;
+	}
 }
 
 /*
@@ -132,6 +191,10 @@ int mic_tcp_connect(int socket, mic_tcp_sock_addr addr)
 
 	/* Envoi du SYN */
 	mic_tcp_pdu pdu_syn = make_special_pdu(1,0,0,addr);
+	#ifdef DEBUG
+	print("Envoi du SYN\n");
+	afficher_pdu(pdu_syn);
+	#endif
 	if (IP_send(pdu_syn, addr) == -1) {
 		printf("Erreur d'envoi du syn\n");
 		return -1;
@@ -148,7 +211,10 @@ int mic_tcp_connect(int socket, mic_tcp_sock_addr addr)
 		if (IP_recv(&pdu_syn_ack, &addr, TIMEOUT-(get_now_time_msec()-timestamp_pdu_sent)) == -1) {
 			return -1;	
 		}
-
+#ifdef DEBUG
+		printf("Pdu reçu pour le syn ack :\n");
+		afficher_pdu(pdu_syn_ack);
+#endif
 		/* Vérification du SYN + ACK */
 		if (pdu_syn_ack.header.syn == 1 && pdu_syn_ack.header.ack == 1 && !pdu_syn_ack.header.fin == 0) {
 			rec_syn_ack = 1;
@@ -160,6 +226,10 @@ int mic_tcp_connect(int socket, mic_tcp_sock_addr addr)
 		/* Envoi du ACK */
 		mic_tcp_pdu pdu_ack = make_special_pdu(0,1,0,addr);
 
+#ifdef DEBUG
+		printf("Envoi du ACK \n");
+		aficher_pdu(pdu_ack);
+#endif
 		if (IP_send(pdu_ack, addr) == -1) {
 			printf("Erreur d'envoi du ack \n");
 			return -1;
