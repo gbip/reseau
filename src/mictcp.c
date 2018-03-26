@@ -48,7 +48,7 @@ int mic_tcp_socket(start_mode sm)
 	int free_socket_found = 0;
 	printf("[MIC-TCP] Appel de la fonction: ");  printf(__FUNCTION__); printf("\n");
 	result = initialize_components(sm); /* Appel obligatoire */
-	set_loss_rate(0);
+	set_loss_rate(30);
 
 	/* Parcours du tableau à la recherche d'un socket fermé */
 	for (int i = 0; i < file_descriptor_counter; i++) {
@@ -121,13 +121,16 @@ int wait_for_ack(int ack_number, mic_tcp_sock_addr *addr) {
 		pdu_ack.payload.size = 0;
 		pdu_ack.payload.data = malloc(0);
 		if (IP_recv(&pdu_ack, addr, TIMEOUT-(get_now_time_msec()-timestamp_pdu_sent)) != -1) {
+
+#ifdef DEBUG
 			afficher_pdu(pdu_ack);
 			printf("pe : %d, pa : %d \n",pe,pa);
-			if (pdu_ack.header.ack == 1 && pdu_ack.header.ack_num == ((pe + 1) % 2)) {
+#endif
+			if (pdu_ack.header.ack == 1 && pdu_ack.header.ack_num == pe ) {
+				pe = (pe + 1) % 2;
 				return 1;
 			}
 		}
-		sleep(0.01);
 	}
 	return 0;
 }
@@ -155,27 +158,25 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size)
 	pdu.payload.data = mesg;
 	pdu.payload.size = mesg_size;
 
-	/* Sauvegarde du PDU dans le buffer */	
-	/*if (last_pdu_sent > 1023) {
-	  printf("Buffer plein\n");
-	  last_pdu_sent = 0;
-	  }
-
-	  send_pdu[last_pdu_sent] = pdu;
-	  last_pdu_sent++;
-	 */
 	printf("pe : %d, pa : %d \n",pe,pa);
+
+	/* Incrémentation du numéro de séquence */
 	pa = (pa + 1) % 2;
 
 	printf("Envoi du PDU : ");	
+#ifdef DEBUG
 	afficher_pdu(pdu);
+#endif 
 	/* Envoi du PDU */
 	if (IP_send(pdu,addr) != -1) {
 		printf("Début d'attente du ack\n");
 		while (!wait_for_ack(pa,&addr)) {
 			printf("Envoi de : ");
+#ifdef DEBUG
 			afficher_pdu(pdu);
+#endif
 			printf("Attente du ACK\n");
+			// Renvoi de l'ancien PDU
 			if (IP_send(pdu,addr) != -1) {
 				return -1;
 			}
@@ -261,7 +262,9 @@ void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_sock_addr addr)
 
 	/* Envoi d'un PDU avec n°seq 'x', renvoi d'un ack avec n°ack 'x'.
 	   Gestion de l'envoi du PDU avec bon numéro de séquence*/	
+#ifdef DEBUG	
 	afficher_pdu(pdu);	
+#endif
 
 	/* Vérification du numéro de séquence */
 	if (pdu.header.seq_num == pe) {
@@ -270,12 +273,23 @@ void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_sock_addr addr)
 		mic_tcp_pdu pdu_ack = make_ack(pe,addr);
 		printf("pe : %d, pa : %d \n",pe,pa);
 		pe = (pe + 1) % 2;
+#ifdef DEBUG
 		printf("Envoi du ack : ");
 		afficher_pdu(pdu_ack);	
+#endif
+		if (IP_send(pdu_ack,addr) == -1) {
+			printf("Erreur : impossible d'envoyer l'acquitement\n");
+			exit(1);
+		}
+	} else {
+		mic_tcp_pdu pdu_ack = make_ack((pe+1)%2,addr);
+#ifdef DEBUG
+		printf("Mauvais numéro de séquence reçu, envoi du ack : ");
+		afficher_pdu(pdu_ack);	
+#endif
 		if (IP_send(pdu_ack,addr) == -1) {
 			printf("Erreur : impossible d'envoyer l'acquitement\n");
 			exit(1);
 		}
 	}
-	// FIXME : Vérifier qu'il n'y a vraiment rien à faire si jamais le numéro de séquence n'est pas bon.
-	}
+}
