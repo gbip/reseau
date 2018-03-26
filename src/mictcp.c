@@ -1,3 +1,6 @@
+/* TODO : A faire durant le TP3 :
+   Mettre à jour l'état du socket
+ */
 #include <mictcp.h>
 #include <api/mictcp_core.h>
 
@@ -37,6 +40,24 @@ void afficher_pdu(mic_tcp_pdu pdu) {
 	printf("\n");
 }
 
+mic_tcp_pdu make_special_pdu(int syn, int ack, int fin, mic_tcp_sock_addr addr) {
+
+	mic_tcp_pdu pdu;
+
+	/* Gestion du header */
+	pdu.header.source_port = addr.port;
+	pdu.header.dest_port = 9999; // Cette valeur va être modifiée derrière par la couche en dessous, du coup on peut mettre n'importe quoi.
+	pdu.header.seq_num = 0; // TODO : Vérifier que c'est bon.
+	pdu.header.ack_num = 0;
+	pdu.header.syn= syn;
+	pdu.header.ack = ack;
+	pdu.header.fin = fin;
+
+	pdu.payload.size = 0;
+	pdu.payload.data = malloc(pdu.payload.size * sizeof(int)); // FIXME : Free les malloc
+	return pdu;
+
+}
 
 /*
  * Permet de créer un socket entre l’application et MIC-TCP
@@ -108,8 +129,47 @@ int mic_tcp_accept(int socket, mic_tcp_sock_addr* addr)
 int mic_tcp_connect(int socket, mic_tcp_sock_addr addr)
 {
 	printf("[MIC-TCP] Appel de la fonction: ");  printf(__FUNCTION__); printf("\n");
-	return 1;
-}
+
+	/* Envoi du SYN */
+	mic_tcp_pdu pdu_syn = make_special_pdu(1,0,0,addr);
+	if (IP_send(pdu_syn, addr) == -1) {
+		printf("Erreur d'envoi du syn\n");
+		return -1;
+	}
+
+	/* Récéption du SYN + ACK */
+	mic_tcp_pdu pdu_syn_ack;
+	pdu_syn_ack.payload.size = 0;
+	pdu_syn_ack.payload.data = malloc(pdu_syn_ack.payload.size * sizeof(int));
+	unsigned long timestamp_pdu_sent = get_now_time_msec();
+	int rec_syn_ack = 0;
+
+	while (get_now_time_msec() - timestamp_pdu_sent < TIMEOUT) {
+		if (IP_recv(&pdu_syn_ack, &addr, TIMEOUT-(get_now_time_msec()-timestamp_pdu_sent)) == -1) {
+			return -1;	
+		}
+
+		/* Vérification du SYN + ACK */
+		if (pdu_syn_ack.header.syn == 1 && pdu_syn_ack.header.ack == 1 && !pdu_syn_ack.header.fin == 0) {
+			rec_syn_ack = 1;
+			break;
+		}
+	}
+
+	if (rec_syn_ack) {
+		/* Envoi du ACK */
+		mic_tcp_pdu pdu_ack = make_special_pdu(0,1,0,addr);
+
+		if (IP_send(pdu_ack, addr) == -1) {
+			printf("Erreur d'envoi du ack \n");
+			return -1;
+		}
+		return 0;
+	}
+	else {
+		return -1;
+	} 
+} 
 
 /* 
  * Attends la récéption d'un acquitement, renvoie 1 si on a reçu l'acquitement pour ack_number avant timeout, sinon renvoie 0.
