@@ -14,8 +14,8 @@
 mic_tcp_sock available_sockets[MAX_SOCKETS];
 
 /* Tableau de pdu envoyés */
-mic_tcp_pdu send_pdu[SEND_PDU_BUFFER_SIZE];
-int last_pdu_sent = 0;
+//mic_tcp_pdu send_pdu[SEND_PDU_BUFFER_SIZE];
+//int last_pdu_sent = 0;
 
 /* Tableaux de numéros de séquence */
 //int pe[MAX_SOCKETS];
@@ -101,6 +101,26 @@ int mic_tcp_connect(int socket, mic_tcp_sock_addr addr)
 	return 1;
 }
 
+/* 
+ * Attends la récéption d'un acquitement, renvoie 1 si on a reçu l'acquitement pour ack_number avant timeout, sinon renvoie 0.
+ */
+int wait_for_ack(int ack_number) {
+	unsigned long timestamp_pdu_sent = get_now_time_msec();
+	while (get_now_time_msec() - timestamp_pdu_sent < TIMEOUT) {
+		printf("Temps écoulé : %lud s\n",get_now_time_msec() - timestamp_pdu_sent);
+		mic_tcp_payload payload_received;
+		payload_received.size = 0;
+		payload_received.data = malloc(payload_received.size * sizeof(int));
+		printf("Appbufferget\n");
+		app_buffer_get(payload_received);
+		printf("Appbufferget fini\n");
+		if (payload_received.size == 0) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
 /*
  * Permet de réclamer l’envoi d’une donnée applicative
  * Retourne la taille des données envoyées, et -1 en cas d'erreur
@@ -125,32 +145,33 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size)
 	pdu.payload.size = mesg_size;
 
 	/* Sauvegarde du PDU dans le buffer */	
-	if (last_pdu_send > 1023) {
+	/*if (last_pdu_sent > 1023) {
 		printf("Buffer plein\n");
 		last_pdu_sent = 0;
 	}
 
 	send_pdu[last_pdu_sent] = pdu;
 	last_pdu_sent++;
-	pa++;
+	*/
+	pa = (pa + 1) % 2;
 	
+	printf("Envoi du PDU\n");	
 	/* Envoi du PDU */
 	if (IP_send(pdu,addr) != -1) {
+		printf("Début d'attente du ack");
+		while (!wait_for_ack(pa)) {
+			printf("Attente du ACK\n");
+			if (IP_send(pdu,addr) != -1) {
+				return -1;
+			}
+		}
+		printf("Ack reçu\n");
 		return mesg_size;
 	} else {
 		return -1;
 	}
 }
 
-/* 
- * Attends la récéption d'un acquitement, renvoie 1 si on a reçu l'acquitement pour ack_number avant timeout, sinon renvoie 0.
- */
-int wait_for_ack(int ack_number) {
-	unsigned long timestamp_pdu_sent = get_now_time_msec();
-	while (get_now_time_msec() - timestamp_pdu_sent < TIMEOUT) {
-		mic_tcp_pdu pdu_received = app_buffer_get
-	}
-}
 
 /*
  * Permet à l’application réceptrice de réclamer la récupération d’une donnée
@@ -190,7 +211,7 @@ int mic_tcp_close (int socket)
 /*
  * Construis un PDU de ack
  */
-mic_tcp_pdu make_ack(int ack_num, mic_tcp_addr addr) {
+mic_tcp_pdu make_ack(int ack_num, mic_tcp_sock_addr addr) {
 	mic_tcp_pdu pdu;
 	/* Gestion du header */
 	pdu.header.source_port = addr.port;
@@ -200,6 +221,9 @@ mic_tcp_pdu make_ack(int ack_num, mic_tcp_addr addr) {
 	pdu.header.syn= 0;
 	pdu.header.ack = 1;
 	pdu.header.fin = 0;
+
+	pdu.payload.size = 0;
+	pdu.payload.data = malloc(pdu.payload.size * sizeof(int)); // FIXME : Free les malloc
 	return pdu;
 }
 
@@ -226,10 +250,14 @@ void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_sock_addr addr)
 
 	/* Vérification du numéro de séquence */
 	if (pdu.header.seq_num == pe) {
+		printf("PDU reçu\n");
 		app_buffer_put(pdu.payload);
-		mic_tcp_pdu pdu_ack = make_ack(pe);
-		pe++;
-		IP_send(pdu_ack,addr);
+		mic_tcp_pdu pdu_ack = make_ack(pe,addr);
+		pe = (pe + 1) % 2;
+		if (IP_send(pdu_ack,addr) == -1) {
+			printf("Erreur : impossible d'envoyer l'acquitement\n");
+			exit(1);
+		}
 	}
 	// FIXME : Vérifier qu'il n'y a vraiment rien à faire si jamais le numéro de séquence n'est pas bon.
 }
