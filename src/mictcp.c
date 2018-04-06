@@ -33,20 +33,22 @@ int ack_rec = 0;
 /* Compteur pour les descripteurs de fichiers */
 int file_descriptor_counter = 0;
 
-
-
+/* Mets à jour l'état du dernier socket créé */
 void set_last_sock_state(protocol_state state) {
 	available_sockets[file_descriptor_counter].state = state;
 }
 
+/* Renvoi l'état du dernier socket créé */
 protocol_state get_last_sock_state() {
 	return available_sockets[file_descriptor_counter].state;
 }
 
+/* Renvoi 1 si l'état du dernier socket créé est CONNECTED */
 int connection_initialized() {
 	return get_last_sock_state() == CONNECTED;
 }
 
+/* Affiche un pdu pour le débug */
 void afficher_pdu(mic_tcp_pdu pdu) {
 	printf("Source_port : %d | Seq_num : %d | Ack_num : %d | Syn : %d | Ack : %d | Fin : %d | Data (%d) : ",pdu.header.source_port, pdu.header.seq_num, pdu.header.ack_num, pdu.header.syn, pdu.header.ack, pdu.header.fin, pdu.payload.size);
 	for (int i = 0; i < pdu.payload.size; i++) {
@@ -55,6 +57,7 @@ void afficher_pdu(mic_tcp_pdu pdu) {
 	printf("\n");
 }
 
+/* Permet de créer un pdu spécial, c'est à dire un pdu qui contiens des flags particuliers (syn, ack, fin) */
 mic_tcp_pdu make_special_pdu(int syn, int ack, int fin, mic_tcp_sock_addr addr) {
 
 	mic_tcp_pdu pdu;
@@ -84,7 +87,7 @@ int mic_tcp_socket(start_mode sm)
 	int free_socket_found = 0;
 	printf("[MIC-TCP] Appel de la fonction: ");  printf(__FUNCTION__); printf("\n");
 	result = initialize_components(sm); /* Appel obligatoire */
-	set_loss_rate(30);
+	set_loss_rate(0);
 
 	/* Parcours du tableau à la recherche d'un socket fermé */
 	for (int i = 0; i < file_descriptor_counter; i++) {
@@ -146,7 +149,6 @@ int mic_tcp_accept(int socket, mic_tcp_sock_addr* addr)
 			if (IP_recv(&pdu_syn, addr, TIMEOUT) == -1) {
 				printf("Erreur recv \n");
 			} else {
-
 				/* Vérification du SYN */
 				if (pdu_syn.header.syn == 1 && pdu_syn.header.ack == 0 && pdu_syn.header.fin == 0) {
 					rec_syn = 1;
@@ -185,7 +187,6 @@ int mic_tcp_accept(int socket, mic_tcp_sock_addr* addr)
 			}
 			/* Vérification du ACK */
 			if (pdu_ack.header.syn == 0 && pdu_ack.header.ack == 1 && pdu_ack.header.fin == 0) {
-
 				rec_ack = 1;
 				break;
 			}
