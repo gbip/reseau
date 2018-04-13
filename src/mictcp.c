@@ -280,7 +280,7 @@ int wait_for_ack(int ack_number, mic_tcp_sock_addr *addr) {
 			printf("pe : %d, pa : %d \n",pe,pa);
 #endif
 			if (pdu_ack.header.ack == 1 && pdu_ack.header.ack_num == pe ) {
-				pe = (pe + 1) % 2;
+				pe = pe + 1;
 				return 1;
 			}
 		}
@@ -297,7 +297,7 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size)
 	printf("[MIC-TCP] Appel de la fonction: "); printf(__FUNCTION__); printf("\n");
 	mic_tcp_sock_addr addr = available_sockets[mic_sock].addr;
 	mic_tcp_pdu pdu;
-
+		
 	/* Gestion du header */
 	pdu.header.source_port = addr.port;
 	pdu.header.dest_port = 9999; // Cette valeur va être modifiée derrière par la couche en dessous, du coup on peut mettre n'importe quoi.
@@ -315,7 +315,7 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size)
 	printf("pe : %d, pa : %d \n",pe,pa);
 #endif 
 	/* Incrémentation du numéro de séquence */
-	pa = (pa + 1) % 2;
+	pa = pa + 1;
 
 	printf("Envoi du PDU : ");	
 #ifdef DEBUG
@@ -437,7 +437,7 @@ void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_sock_addr addr)
 #ifdef DEBUG
 			printf("pe : %d, pa : %d \n",pe,pa);
 #endif
-			pe = (pe + 1) % 2;
+			pe = pe + 1;
 #ifdef DEBUG
 			printf("process_received_pdu : Envoi du ack : ");
 			afficher_pdu(pdu_ack);	
@@ -447,7 +447,7 @@ void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_sock_addr addr)
 				exit(1);
 			}
 		} else {
-			mic_tcp_pdu pdu_ack = make_ack((pe+1)%2,addr);
+			mic_tcp_pdu pdu_ack = make_ack(pe-1,addr);
 #ifdef DEBUG
 			printf("Mauvais numéro de séquence reçu, envoi du ack : ");
 			afficher_pdu(pdu_ack);	
