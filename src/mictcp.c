@@ -1,14 +1,10 @@
-/* TODO : A faire durant le TP3 :
-   Mettre à jour l'état du socket
-   Résoudre les erreurs dans le accept/connect
- */
 #include <pthread.h>
 #include <mictcp.h>
 #include <api/mictcp_core.h>
 // Le nombre de socket maximum
 #define MAX_SOCKETS 1024
-//#define DEBUG
-//#define DEBUG_MESSAGE
+#define DEBUG
+#define DEBUG_MESSAGE
 // La taille du buffer d'envoi des pdus
 #define SEND_PDU_BUFFER_SIZE 1024
 
@@ -36,7 +32,8 @@ int ack_perdu = 0;
 int nb_pdu_envoye =0 ;
 
 /* Seuil de perte [0-1] */
-float threshold = 0.02 ;
+float threshold = -1.0;
+float threshold_min = 0.02;
 
 /* Compteur pour les descripteurs de fichiers */
 int file_descriptor_counter = 0;
@@ -91,6 +88,12 @@ mic_tcp_pdu make_special_pdu(int syn, int ack, int fin, mic_tcp_sock_addr addr) 
 
 }
 
+/* Assigne les champs data d'un pdu avec les données fournies en entrée */
+void set_pdu_data(mic_tcp_pdu* pdu,char* data, int size) {
+	pdu->payload.size = size;
+	pdu->payload.data = data;
+}
+
 /*
  * Permet de créer un socket entre l’application et MIC-TCP
  * Retourne le descripteur du socket ou bien -1 en cas d'erreur
@@ -101,7 +104,7 @@ int mic_tcp_socket(start_mode sm)
 	int free_socket_found = 0;
 	printf("[MIC-TCP] Appel de la fonction: ");  printf(__FUNCTION__); printf("\n");
 	result = initialize_components(sm); /* Appel obligatoire */
-	set_loss_rate(7);
+	set_loss_rate(0);
 
 	/* Parcours du tableau à la recherche d'un socket fermé */
 	for (int i = 0; i < file_descriptor_counter; i++) {
@@ -152,13 +155,14 @@ int mic_tcp_accept(int socket, mic_tcp_sock_addr* addr)
 {
 	sleep(3);
 	printf("[MIC-TCP] Appel de la fonction: ");  printf(__FUNCTION__); printf("\n");
-
+	
 	/* Récéption du SYN */
 	int rec_syn = 0;
+	float* pdu_data = malloc(sizeof(float));
 	{
 		mic_tcp_pdu pdu_syn;
-		pdu_syn.payload.size = 0;
-		pdu_syn.payload.data = malloc(pdu_syn.payload.size * sizeof(int));
+		pdu_syn.payload.size = sizeof(float);
+		pdu_syn.payload.data = malloc(sizeof(float));
 		while (1) {
 			if (IP_recv(&pdu_syn, addr, TIMEOUT_INITIALISATION_CONNECTION) == -1) {
 				printf("Erreur recv \n");
@@ -173,11 +177,25 @@ int mic_tcp_accept(int socket, mic_tcp_sock_addr* addr)
 			}
 			sleep(0.1);
 		}
+
+		// TODO : Gérer les payload sans data.
+		float threshold_requested = *((float*)pdu_syn.payload.data);
+		printf("Le seuil demandé est de : %f\n",threshold_requested);
+		if (threshold_requested < threshold_min) {
+			threshold = threshold_min;
+			printf("Le seuil demandé est trop faible, envoi du seuil %f\n",threshold_min);
+			pdu_data = &threshold_min;
+		} else {
+			printf("Ok, le seuil est bon \n");
+			threshold = threshold_requested;
+			*pdu_data = *((float*)pdu_syn.payload.data);
+		}
 	}
 
 	if (rec_syn) {
 		/* Envoi du SYN + ACK */
 		mic_tcp_pdu pdu_syn_ack = make_special_pdu(1,1,0,*addr);
+		set_pdu_data(&pdu_syn_ack,(char*)pdu_data,sizeof(int));
 #ifdef DEBUG
 		printf("Envoi du PDU de SYN ACK : ");
 		afficher_pdu(pdu_syn_ack);
@@ -218,6 +236,7 @@ int mic_tcp_accept(int socket, mic_tcp_sock_addr* addr)
 	}
 }
 
+
 /*
  * Permet de réclamer l’établissement d’une connexion
  * Retourne 0 si la connexion est établie, et -1 en cas d’échec
@@ -228,6 +247,10 @@ int mic_tcp_connect(int socket, mic_tcp_sock_addr addr)
 
 	/* Envoi du SYN */
 	mic_tcp_pdu pdu_syn = make_special_pdu(1,0,0,addr);
+	float * pdu_data = malloc(sizeof(float));
+	*pdu_data = 0.01;
+	set_pdu_data(&pdu_syn,(char*)pdu_data,sizeof(float));
+	printf("Le seuil demandé est de %f\n",(float)*pdu_data);
 #ifdef DEBUG
 	printf("Envoi du SYN\n");
 	afficher_pdu(pdu_syn);
@@ -239,8 +262,8 @@ int mic_tcp_connect(int socket, mic_tcp_sock_addr addr)
 
 	/* Récéption du SYN + ACK */
 	mic_tcp_pdu pdu_syn_ack;
-	pdu_syn_ack.payload.size = 0;
-	pdu_syn_ack.payload.data = malloc(pdu_syn_ack.payload.size * sizeof(int));
+	pdu_syn_ack.payload.size = sizeof(float);
+	pdu_syn_ack.payload.data = malloc(sizeof(float));
 	unsigned long timestamp_pdu_sent = get_now_time_msec();
 	int rec_syn_ack = 0;
 	while (get_now_time_msec() - timestamp_pdu_sent < TIMEOUT_INITIALISATION_CONNECTION) {
@@ -253,13 +276,15 @@ int mic_tcp_connect(int socket, mic_tcp_sock_addr addr)
 #endif
 		/* Vérification du SYN + ACK */
 		if (pdu_syn_ack.header.syn == 1 && pdu_syn_ack.header.ack == 1 && pdu_syn_ack.header.fin == 0) {
-			printf("SYN-ACK reçu !");
+			printf("SYN-ACK reçu !\n");
 			rec_syn_ack = 1;
 			break;
 		} else {
-			printf("Erreur : mauvais PDU");
+			printf("Erreur : mauvais PDU\n");
 		}
 	}
+	threshold = *((float*)pdu_syn_ack.payload.data);
+	printf("Le seuil reçu est de %f\n",threshold);
 
 	if (rec_syn_ack) {
 		/* Envoi du ACK */
