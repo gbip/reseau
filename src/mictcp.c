@@ -28,7 +28,14 @@ int pe = 0;
 int pa = 0;
 
 
-int ack_rec = 0;
+/* Compte le nombre de ack perdu */
+int ack_perdu = 0;
+
+/* Nombre de pdu envoyés */
+int nb_pdu_envoye =0 ;
+
+/* Seuil de perte [0-100] */
+int threshold = 30 ;
 
 /* Compteur pour les descripteurs de fichiers */
 int file_descriptor_counter = 0;
