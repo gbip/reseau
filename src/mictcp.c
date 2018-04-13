@@ -2,6 +2,7 @@
    Mettre à jour l'état du socket
    Résoudre les erreurs dans le accept/connect
  */
+#include <pthread.h>
 #include <mictcp.h>
 #include <api/mictcp_core.h>
 // Le nombre de socket maximum
@@ -28,7 +29,6 @@ mic_tcp_sock available_sockets[MAX_SOCKETS];
 int pe = 0;
 int pa = 0;
 
-
 /* Compte le nombre de ack perdu */
 int ack_perdu = 0;
 
@@ -41,6 +41,10 @@ float threshold = 0.02 ;
 /* Compteur pour les descripteurs de fichiers */
 int file_descriptor_counter = 0;
 
+pthread_cond_t condition = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t condition_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+
 /* Mets à jour l'état du dernier socket créé */
 void set_last_sock_state(protocol_state state) {
 	available_sockets[file_descriptor_counter].state = state;
@@ -51,9 +55,9 @@ protocol_state get_last_sock_state() {
 	return available_sockets[file_descriptor_counter].state;
 }
 
-/* Renvoi 1 si l'état du dernier socket créé est CONNECTED */
-int connection_initialized() {
-	return get_last_sock_state() == CONNECTED;
+/* Mets le thread en attente tant que la connection n'est pas initialisée */
+void sleep_until_initialization() {
+	pthread_cond_wait(&condition,&condition_mutex);
 }
 
 /* Affiche un pdu pour le débug */
@@ -205,6 +209,9 @@ int mic_tcp_accept(int socket, mic_tcp_sock_addr* addr)
 	}
 	if (rec_ack) {
 		set_last_sock_state(CONNECTED);
+		pthread_mutex_lock(&condition_mutex);
+		pthread_cond_broadcast(&condition);
+		pthread_mutex_unlock(&condition_mutex);
 		return 0;
 	} else {
 		return -1;
