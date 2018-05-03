@@ -45,9 +45,10 @@ C'est le serveur qui a le dernier mot.
 
 Partie gérée en multithreading. 
 
-Dans src/api/mictcp_core.c, nous avons modifié le code pour introduire une fonction `sleep_until_initialization`. ** Je la retrouve pas dans le code ... ** 
+Nous avons introduit une fonction `sleep_until_initialization`. Elle est définie dans notre code dans mictcp.c et permet d'attendre une variable condition.
 
-Le thread d'écoute lance la fonction `listening` qui fait appel à `IP_recv`. Il se retrouve bloqué dans l'attente d'une variable condition. Celle-ci est libérée lorsque la connection est établie. Cela nous permet d'utiliser la fonction `IP_recv` dans la phase d'établissement de connection.
+Dans src/api/mictcp_core.c, nous avons introduit cette fonction.
+Le thread d'écoute lance la fonction `listening` qui fait appel à `IP_recv`. Par appel à `sleep_until_initialization`, il se retrouve bloqué dans l'attente d'une variable condition. Celle-ci est libérée lorsque la connection est établie. Cela nous permet d'utiliser la fonction `IP_recv` dans la phase d'établissement de connection.
 
 
 Nos implémentations fonctionnent.
