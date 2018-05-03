@@ -1,5 +1,5 @@
 ---
-title : Rapport TP 2 et 3 du bureau d'étude de réseau.
+title : Rapport TP 4 du bureau d'étude de réseau.
 authors : Eva SOUSSI,Paul FLORENCE
 ---
 
@@ -48,7 +48,6 @@ Partie gérée en multithreading.
 Dans src/api/mictcp_core.c, nous avons modifié le code pour introduire une fonction `sleep_until_initialization`. ** Je la retrouve pas dans le code ... ** 
 
 Le thread d'écoute lance la fonction `listening` qui fait appel à `IP_recv`. Il se retrouve bloqué dans l'attente d'une variable condition. Celle-ci est libérée lorsque la connection est établie. Cela nous permet d'utiliser la fonction `IP_recv` dans la phase d'établissement de connection.
-
 
 
 Nos implémentations fonctionnent.
