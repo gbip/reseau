@@ -16,9 +16,6 @@ pthread_mutex_t lock;
 unsigned short  loss_rate = 0;
 struct sockaddr_in remote_addr;
 
-/* Cette fonction viens de notre implémentation dans mic_tcp.c */
-void sleep_until_initialization();
-
 /* This is for the buffer */
 TAILQ_HEAD(tailhead, app_buffer_entry) app_buffer_head;
 struct tailhead *headp;
@@ -85,11 +82,6 @@ int initialize_components(start_mode mode)
             local_addr.sin_addr.s_addr = htonl(INADDR_ANY);
             bnd = bind(sys_socket, (struct sockaddr *) &local_addr, sizeof(local_addr));
         }
-    }
-
-    if((initialized == 1) && (mode == SERVER))
-    {
-        pthread_create (&listen_th, NULL, listening, "1");
     }
 
     return initialized;
@@ -291,6 +283,9 @@ void app_buffer_put(mic_tcp_payload bf)
 
 void* listening(void* arg)
 {
+
+	int fd = *(int*)arg;
+
     mic_tcp_pdu pdu_tmp;
     int recv_size;
     mic_tcp_sock_addr remote;
@@ -303,8 +298,6 @@ void* listening(void* arg)
     pdu_tmp.payload.size = payload_size;
     pdu_tmp.payload.data = malloc(payload_size);
 	
-    sleep_until_initialization();
-
     while(1)
     {
         pdu_tmp.payload.size = payload_size;
@@ -312,12 +305,13 @@ void* listening(void* arg)
 
         if(recv_size != -1)
         {
-            process_received_PDU(pdu_tmp, remote);
+            process_received_PDU(pdu_tmp, remote, fd);
         } else {
             /* This should never happen */
             printf("Error in recv\n");
         }
     }
+	free(arg);
 }
 
 

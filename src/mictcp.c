@@ -15,15 +15,11 @@
 /* Tableau de socket */
 mic_tcp_sock available_sockets[MAX_SOCKETS];
 
-/* Tableau de pdu envoyés */
-//mic_tcp_pdu send_pdu[SEND_PDU_BUFFER_SIZE];
-//int last_pdu_sent = 0;
+void* listening(void* arg);
 
 /* Tableaux de numéros de séquence */
-//int pe[MAX_SOCKETS];
-//int pa[MAX_SOCKETS];
-int pe = 0;
-int pa = 0;
+int pe[MAX_SOCKETS] = {0};
+int pa[MAX_SOCKETS] = {0};
 
 /* Compte le nombre de ack perdu */
 int ack_perdu = 0;
@@ -38,10 +34,6 @@ float threshold_min = 0.02;
 /* Compteur pour les descripteurs de fichiers */
 int file_descriptor_counter = 0;
 
-pthread_cond_t condition = PTHREAD_COND_INITIALIZER;
-pthread_mutex_t condition_mutex = PTHREAD_MUTEX_INITIALIZER;
-
-
 /* Mets à jour l'état du dernier socket créé */
 void set_last_sock_state(protocol_state state) {
 	available_sockets[file_descriptor_counter].state = state;
@@ -50,11 +42,6 @@ void set_last_sock_state(protocol_state state) {
 /* Renvoi l'état du dernier socket créé */
 protocol_state get_last_sock_state() {
 	return available_sockets[file_descriptor_counter].state;
-}
-
-/* Mets le thread en attente tant que la connection n'est pas initialisée */
-void sleep_until_initialization() {
-	pthread_cond_wait(&condition,&condition_mutex);
 }
 
 /* Affiche un pdu pour le débug */
@@ -110,8 +97,8 @@ int mic_tcp_socket(start_mode sm)
 	for (int i = 0; i < file_descriptor_counter; i++) {
 		if (available_sockets[i].state == CLOSED) {
 			available_sockets[i].state = IDLE;
-			//pe[i] = 0;
-			//pa[i] = 0;
+			pe[i] = 0;
+			pa[i] = 0;
 			result = i;
 			free_socket_found = 1;
 			break;
@@ -226,9 +213,10 @@ int mic_tcp_accept(int socket, mic_tcp_sock_addr* addr)
 	}
 	if (rec_ack) {
 		set_last_sock_state(CONNECTED);
-		pthread_mutex_lock(&condition_mutex);
-		pthread_cond_broadcast(&condition);
-		pthread_mutex_unlock(&condition_mutex);
+		int* sock = malloc(sizeof(int));
+		pthread_t tid;
+		*sock = socket;
+		pthread_create(&tid, NULL, listening, sock);
 		return 0;
 	} else {
 		return -1;
@@ -308,7 +296,7 @@ int mic_tcp_connect(int socket, mic_tcp_sock_addr addr)
 /* 
  * Attends la réception d'un acquitement, renvoie 1 si on a reçu l'acquitement pour ack_number avant timeout, sinon renvoie 0.
  */
-int wait_for_ack(int ack_number, mic_tcp_sock_addr *addr) {
+int wait_for_ack(int ack_number, mic_tcp_sock_addr *addr, int fd) {
 	unsigned long timestamp_pdu_sent = get_now_time_msec();
 	while (get_now_time_msec() - timestamp_pdu_sent < TIMEOUT) {
 		mic_tcp_pdu pdu_ack;
@@ -318,10 +306,10 @@ int wait_for_ack(int ack_number, mic_tcp_sock_addr *addr) {
 
 #ifdef DEBUG
 			afficher_pdu(pdu_ack);
-			printf("WAIT_FOR_ACK | pe : %d, pa : %d \n",pe,pa);
+			printf("WAIT_FOR_ACK | pe : %d, pa : %d \n",pe[fd],pa[fd]);
 #endif
-			if (pdu_ack.header.ack == 1 && pdu_ack.header.ack_num == pe ) {
-				pe = pe + 1;
+			if (pdu_ack.header.ack == 1 && pdu_ack.header.ack_num == pe[fd] ) {
+				pe[fd] = pe[fd] + 1;
 				return 1;
 			}
 		}
@@ -337,7 +325,7 @@ int send_blocking(int mic_sock, mic_tcp_pdu pdu, mic_tcp_sock_addr addr) {
 #ifdef DEBUG
 		printf("Début d'attente du ack\n");
 #endif
-		while (!wait_for_ack(pa,&addr)) {
+		while (!wait_for_ack(pa[mic_sock],&addr,mic_sock)) {
 #ifdef DEBUG
 			printf("Envoi de : ");
 			afficher_pdu(pdu);
@@ -369,7 +357,7 @@ Cette fonction attend TIMEOUT et passe à la suite si le ACK n'a pas été reçu
 int send_non_blocking(int mic_sock, mic_tcp_pdu pdu, mic_tcp_sock_addr addr) {
 
 	if(IP_send(pdu,addr) != -1) {
-		return wait_for_ack(pa,&addr);
+		return wait_for_ack(pa[mic_sock],&addr, mic_sock);
 	}
 	else {
 		return -1;
@@ -383,14 +371,16 @@ int send_non_blocking(int mic_sock, mic_tcp_pdu pdu, mic_tcp_sock_addr addr) {
  */
 int mic_tcp_send (int mic_sock, char* mesg, int mesg_size)
 {
+#ifdef DEBUG
 	printf("[MIC-TCP] Appel de la fonction: "); printf(__FUNCTION__); printf("\n");
+#endif
 	mic_tcp_sock_addr addr = available_sockets[mic_sock].addr;
 	mic_tcp_pdu pdu;
 		
 	/* Gestion du header */
 	pdu.header.source_port = addr.port;
 	pdu.header.dest_port = 9999; // Cette valeur va être modifiée derrière par la couche en dessous, du coup on peut mettre n'importe quoi.
-	pdu.header.seq_num = pa;
+	pdu.header.seq_num = pa[mic_sock];
 	pdu.header.ack_num = 0;
 	pdu.header.syn= 0;
 	pdu.header.ack = 0;
@@ -401,10 +391,10 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size)
 	pdu.payload.size = mesg_size;
 
 #ifdef DEBUG
-	printf("pe : %d, pa : %d \n",pe,pa);
+	printf("pe : %d, pa : %d \n",pe[mic_sock],pa[mic_sock]);
 #endif 
 	/* Incrémentation du numéro de séquence */
-	pa = pa + 1;
+	pa[mic_sock]=pa[mic_sock]+ 1;
 #ifdef DEBUG
 	printf("Envoi du PDU : ");	
 	afficher_pdu(pdu);
@@ -429,7 +419,7 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size)
 			return mesg_size;
 		} else if (result == 0) {
 			// L'envoi est considéré comme réussi bien qu'on ai perdu le paquet
-			pa = pa -1;
+			pa[mic_sock]=pa[mic_sock]-1;
 			ack_perdu++;
 			return mesg_size;
 		} else {
@@ -509,7 +499,7 @@ int verify_ack(mic_tcp_pdu pdu, int ack_num) {
  * le buffer de réception du socket. Cette fonction utilise la fonction
  * app_buffer_put().
  */
-void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_sock_addr addr)
+void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_sock_addr addr,int mic_sock)
 {
 #ifdef DEBUG
 	printf("[MIC-TCP] Appel de la fonction: "); printf(__FUNCTION__); printf("\n");
@@ -530,16 +520,16 @@ void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_sock_addr addr)
 
 
 		/* Vérification du numéro de séquence */
-		if (pdu.header.seq_num == pe) {
+		if (pdu.header.seq_num == pe[mic_sock]) {
 #ifdef DEBUG
 			printf("PDU reçu\n");
 #endif
 			app_buffer_put(pdu.payload);
-			mic_tcp_pdu pdu_ack = make_ack(pe,addr);
+			mic_tcp_pdu pdu_ack = make_ack(pe[mic_sock],addr);
 #ifdef DEBUG
-			printf("pe : %d, pa : %d \n",pe,pa);
+			printf("pe : %d,pa : %d \n",pe[mic_sock],pa[mic_sock]);
 #endif
-			pe = pe + 1;
+			pe[mic_sock]= pe[mic_sock]+ 1;
 #ifdef DEBUG
 			printf("process_received_pdu : Envoi du ack : ");
 			afficher_pdu(pdu_ack);	
@@ -549,7 +539,7 @@ void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_sock_addr addr)
 				exit(1);
 			}
 		} else {
-			mic_tcp_pdu pdu_ack = make_ack(pe-1,addr);
+			mic_tcp_pdu pdu_ack = make_ack(pe[mic_sock]-1,addr);
 #ifdef DEBUG
 			printf("Mauvais numéro de séquence reçu, envoi du ack : ");
 			afficher_pdu(pdu_ack);	
