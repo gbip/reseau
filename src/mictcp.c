@@ -3,8 +3,8 @@
 #include <api/mictcp_core.h>
 // Le nombre de socket maximum
 #define MAX_SOCKETS 1024
-#define DEBUG
-#define DEBUG_MESSAGE
+//#define DEBUG
+//#define DEBUG_MESSAGE
 // La taille du buffer d'envoi des pdus
 #define SEND_PDU_BUFFER_SIZE 1024
 
@@ -76,7 +76,7 @@ mic_tcp_pdu make_special_pdu(int syn, int ack, int fin, mic_tcp_sock_addr addr) 
 	/* Gestion du header */
 	pdu.header.source_port = addr.port;
 	pdu.header.dest_port = 9999; // Cette valeur va être modifiée derrière par la couche en dessous, du coup on peut mettre n'importe quoi.
-	pdu.header.seq_num = 0; // TODO : Vérifier que c'est bon.
+	pdu.header.seq_num = 0; 
 	pdu.header.ack_num = 0;
 	pdu.header.syn= syn;
 	pdu.header.ack = ack;
@@ -168,17 +168,16 @@ int mic_tcp_accept(int socket, mic_tcp_sock_addr* addr)
 				printf("Erreur recv \n");
 			} else {
 				/* Vérification du SYN */
-				if (pdu_syn.header.syn == 1 && pdu_syn.header.ack == 0 && pdu_syn.header.fin == 0) {
+				if (pdu_syn.header.syn == 1 && pdu_syn.header.ack == 0 && pdu_syn.header.fin == 0 && pdu_syn.payload.size == sizeof(float)) {
 					rec_syn = 1;
 					break;
 				} else {
-					printf("Invalid packet\n");
+					printf("Invalid packet : %d\n", pdu_syn.payload.size);
 				}	
 			}
 			sleep(0.1);
 		}
-
-		// TODO : Gérer les payload sans data.
+		
 		float threshold_requested = *((float*)pdu_syn.payload.data);
 		printf("Le seuil demandé est de : %f\n",threshold_requested);
 		if (threshold_requested < threshold_min) {
@@ -307,7 +306,7 @@ int mic_tcp_connect(int socket, mic_tcp_sock_addr addr)
 } 
 
 /* 
- * Attends la récéption d'un acquitement, renvoie 1 si on a reçu l'acquitement pour ack_number avant timeout, sinon renvoie 0.
+ * Attends la réception d'un acquitement, renvoie 1 si on a reçu l'acquitement pour ack_number avant timeout, sinon renvoie 0.
  */
 int wait_for_ack(int ack_number, mic_tcp_sock_addr *addr) {
 	unsigned long timestamp_pdu_sent = get_now_time_msec();
@@ -449,7 +448,9 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size)
  */
 int mic_tcp_recv (int socket, char* mesg, int max_mesg_size)
 {
+#ifdef DEBUG
 	printf("[MIC-TCP] Appel de la fonction: "); printf(__FUNCTION__); printf("\n");
+#endif
 
 	/* Initialisation de la payload */
 	mic_tcp_payload payload;
@@ -485,14 +486,14 @@ mic_tcp_pdu make_ack(int ack_num, mic_tcp_sock_addr addr) {
 	/* Gestion du header */
 	pdu.header.source_port = addr.port;
 	pdu.header.dest_port = 9999; // Cette valeur va être modifiée derrière par la couche en dessous, du coup on peut mettre n'importe quoi.
-	pdu.header.seq_num = 42; // TODO : Vérifier que c'est bon.
+	pdu.header.seq_num = 42;
 	pdu.header.ack_num = ack_num;
 	pdu.header.syn= 0;
 	pdu.header.ack = 1;
 	pdu.header.fin = 0;
 
 	pdu.payload.size = 0;
-	pdu.payload.data = malloc(pdu.payload.size * sizeof(int)); // FIXME : Free les malloc
+	pdu.payload.data = malloc(pdu.payload.size * sizeof(int));
 	return pdu;
 }
 
@@ -510,7 +511,9 @@ int verify_ack(mic_tcp_pdu pdu, int ack_num) {
  */
 void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_sock_addr addr)
 {
+#ifdef DEBUG
 	printf("[MIC-TCP] Appel de la fonction: "); printf(__FUNCTION__); printf("\n");
+#endif
 
 	/* Envoi d'un PDU avec n°seq 'x', renvoi d'un ack avec n°ack 'x'.
 	   Gestion de l'envoi du PDU avec bon numéro de séquence*/	
@@ -522,7 +525,6 @@ void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_sock_addr addr)
 #endif
 
 	/* Vérification de l'état du socket */
-	/* FIXME : Ne marche que pour 1 seul socket !!!! */
 	protocol_state state = get_last_sock_state();
 	if (state == CONNECTED) {
 
