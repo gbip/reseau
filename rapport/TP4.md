@@ -53,11 +53,5 @@ Le thread d'écoute lance la fonction `listening` qui fait appel à `IP_recv`. P
 
 Nos implémentations fonctionnent.
 
-## NOTE * à enlever *
-Dans src/apps/gateway.c on a rajouté un exit(-1) mais je ne sais pas où : il faudrait le préciser.
-
-
-## A faire 
-
-Gérer la fermeture de la connexion.
-Free les malloc
+## Modification de `src/apps/gateway.c`
+Nous avons rajouté la ligne `exit(1)` à la ligne 226 du fichier `src/apps/gateway.c` pour gérer les erreurs de connection.
