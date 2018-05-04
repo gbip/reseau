@@ -83,7 +83,7 @@ mic_tcp_pdu make_special_pdu(int syn, int ack, int fin, mic_tcp_sock_addr addr) 
 	pdu.header.fin = fin;
 
 	pdu.payload.size = 0;
-	pdu.payload.data = malloc(pdu.payload.size * sizeof(int)); // FIXME : Free les malloc
+	pdu.payload.data = NULL;
 	return pdu;
 
 }
