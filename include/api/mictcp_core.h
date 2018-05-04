@@ -1,8 +1,8 @@
 #ifndef MICTCP_CORE_H
 #define MICTCP_CORE_H
 
-#include <mictcp.h>
 #include <math.h>
+#include <mictcp.h>
 
 /**************************************************************
  * Public core functions, can be used for implementing mictcp *
@@ -27,10 +27,9 @@ unsigned long get_now_time_usec();
 #define API_SC_Port 8525
 #define API_HD_Size 15
 
-typedef struct ip_payload
-{
-  char* data; /* données transport */
-  int size; /* taille des données */
+typedef struct ip_payload {
+	char* data; /* données transport */
+	int size;   /* taille des données */
 } ip_payload;
 
 int mic_tcp_core_send(mic_tcp_payload);
