@@ -16,6 +16,9 @@ pthread_mutex_t lock;
 unsigned short  loss_rate = 0;
 struct sockaddr_in remote_addr;
 
+/* Cette fonction viens de notre implémentation dans mic_tcp.c */
+void sleep_until_initialization();
+
 /* This is for the buffer */
 TAILQ_HEAD(tailhead, app_buffer_entry) app_buffer_head;
 struct tailhead *headp;
@@ -299,7 +302,8 @@ void* listening(void* arg)
     const int payload_size = 1500 - API_HD_Size;
     pdu_tmp.payload.size = payload_size;
     pdu_tmp.payload.data = malloc(payload_size);
-
+	
+    sleep_until_initialization();
 
     while(1)
     {
