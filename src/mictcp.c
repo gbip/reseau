@@ -93,12 +93,11 @@ void set_pdu_data(mic_tcp_pdu* pdu, char* data, int size) {
  * Retourne le descripteur du socket ou bien -1 en cas d'erreur
  */
 int mic_tcp_socket(start_mode sm) {
-	int result = -1;
 	int free_socket_found = 0;
 	printf("[MIC-TCP] Appel de la fonction: ");
 	printf(__FUNCTION__);
 	printf("\n");
-	result = initialize_components(sm); /* Appel obligatoire */
+	int result = initialize_components(sm); /* Appel obligatoire */
 	set_loss_rate(0);
 
 	/* Parcours du tableau à la recherche d'un socket fermé */
@@ -501,12 +500,6 @@ mic_tcp_pdu make_ack(int ack_num, mic_tcp_sock_addr addr) {
 	return pdu;
 }
 
-/*
- * Renvoies 1 si c'est le ack que l'on attends.
- */
-int verify_ack(mic_tcp_pdu pdu, int ack_num) {
-	return pdu.header.ack == 1 && pdu.header.ack_num == ack_num;
-}
 /*
  * Traitement d’un PDU MIC-TCP reçu (mise à jour des numéros de séquence
  * et d'acquittement, etc.) puis insère les données utiles du PDU dans
