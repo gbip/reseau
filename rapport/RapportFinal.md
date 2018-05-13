@@ -17,7 +17,7 @@ On lance le thread d'écoute lorsque un appel à `accept()` réussit. Il faut fa
 
 Il faut stocker ces données dans un tableau et utiliser le numéro de socket comme indice du tableau pour retrouver le socket correspondant. 
 
-Dans le corps de `listening` nous avons besoin du numéro de socket. On l'alloue donc dynamiquement pour le passer en argument du `pthread_create`.
+Dans le corps de `listening` nous avons besoin du numéro de socket. On l'alloue donc dynamiquement pour le passer en argument du `pthread_create`. On en a également besoin dans `process_received_PDU` donc nous avons modifié le corps de la fonction pour lui donner un argument de plus.
 
 Pour l'asynchronisme en réception, nous créons un thread qui execute en boucle des appels à `IP_recv()` et ensuite appelle `mic_tcp_process_received_pdu()` avec le pdu reçu. Comme dit précédemment, ce thread est lancé lors de l'appel à `accept()`.
 
